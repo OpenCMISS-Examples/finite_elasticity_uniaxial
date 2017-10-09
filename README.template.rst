@@ -31,6 +31,11 @@ or maybe it is a Python only example::
 
 where the XY in the path are the Python major and minor versions respectively.
 
+Verifying the example
+=====================
+
+Explain here how to compare the expected output with the actual output, and where the expected output can be found.
+
 Prerequisites
 =============
 
