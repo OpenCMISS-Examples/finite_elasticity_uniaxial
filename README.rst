@@ -1,10 +1,10 @@
 
 
-======================================
-Template OpenCMISS example - barebones
-======================================
+=====================================
+Template OpenCMISS example - tutorial
+=====================================
 
-This example shows the barebones required for an examplar Fortran example.  For more detailed information refer to the `master <https://github.com/OpenCMISS-Examples/template_example/tree/master>`_ branch.
+This example shows the basic template for a tutorial Fortran example.  For more detailed information refer to the `master <https://github.com/OpenCMISS-Examples/template_example/tree/master>`_ branch.
 
 CMake files
 ===========
@@ -14,6 +14,11 @@ The *CMakeLists.txt* file in the root directory uses the following *find_package
   find_package(OpenCMISSLibs 1.3.0 COMPONENTS iron REQUIRED CONFIG)
 
 What is different here from the basic template in the `master <https://github.com/OpenCMISS-Examples/template_example/tree/master>`_ branch is that we have made use of the *COMPONENTS* option to indicate that only the Iron library is required for this example.
+
+Documentation
+=============
+
+A tutorial is an example with accompanying documentation, this documentation should be written in reStructured-text in the docs directory.
 
 Remember
 ========

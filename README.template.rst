@@ -31,6 +31,23 @@ or maybe it is a Python only example::
 
 where the XY in the path are the Python major and minor versions respectively.
 
+Verifying the example
+=====================
+
+Explain here how to compare the expected output with the actual output, and where the expected output can be found.
+
+Building the documentation
+==========================
+
+The documentation is written in reStructured-text which we are free to read directory but we can also use Sphinx to build into a more appealing form.  The documentation can be build with the following commands::
+
+  cd docs
+  make html
+
+This will prepare an html rendition of the documentation and you can point your favourite webbrowser at it to view.  The root page of the html documentation webfiles are available in::
+
+  docs/_build/html
+
 Prerequisites
 =============
 
