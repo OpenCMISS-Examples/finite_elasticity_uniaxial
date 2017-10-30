@@ -1,6 +1,6 @@
 add_executable(XXXXXXXX ZZZZZZZZ.F90)
 
-target_link_libraries(XXXXXXXX PUBLIC opencmisslibs mpi)
+target_link_libraries(XXXXXXXX PUBLIC opencmisslibs)
 
 # This application requires an input file to execute correctly we have several options
 # as to how we can make this happen.
