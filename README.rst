@@ -18,7 +18,10 @@ What is different here from the basic template in the `master <https://github.co
 Documentation
 =============
 
-A tutorial is an example with accompanying documentation, this documentation should be written in reStructured-text in the docs directory.
+A tutorial is an example with accompanying detailed documentation, this documentation should be written in reStructured-text in the docs directory.  The documentation should be buildable with `Sphinx <https://pypi.python.org/pypi/Sphinx>`_.  An initial skeleton Sphinx documentation is added here.  To build this documentation in html format do the following::
+
+   cd docs
+   make html
 
 Remember
 ========
