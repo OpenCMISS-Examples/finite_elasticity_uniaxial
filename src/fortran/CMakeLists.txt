@@ -3,7 +3,7 @@
 # .F90 (using a capital *F* and not a lowercase one) CMake will automatically run the *C*
 # preprocessor on the file for us, saving us from specifying that through other means.
 # This is only necessary if the file requires the the *C* preprocessor.
-add_executable(XXXXXXXX ZZZZZZZZ.F90)
+add_executable(finite_elasticity_uniaxial finite_elasticity_uniaxial.F90)
 
 # Set the required libraries for this executable.  Here we let CMake know which libraries
 # are required to link the application.  Now because the *opencmisslibs* is known to CMake 
@@ -11,8 +11,4 @@ add_executable(XXXXXXXX ZZZZZZZZ.F90)
 # enough information for CMake to properly build and link the application with the OpenCMISS
 # libraries.
 #
-# While https://github.com/OpenCMISS/iron/issues/88 is not fixed we also need to specify that
-# MPI should also be linked into the application.  Once this issue is resolved we will no longer
-# be required to add this as a link library.  This only applies to examples making use of Iron, 
-# if the example is only using the Zinc library then MPI is not required at all.
-target_link_libraries(XXXXXXXX PUBLIC opencmisslibs)
+target_link_libraries(finite_elasticity_uniaxial PUBLIC opencmisslibs)
