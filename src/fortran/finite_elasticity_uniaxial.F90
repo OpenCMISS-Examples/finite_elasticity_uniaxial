@@ -1,4 +1,4 @@
-!> Main program
+!Main program
 PROGRAM UniaxialExtension
 
   USE OpenCMISS
@@ -22,6 +22,7 @@ PROGRAM UniaxialExtension
   REAL(CMISSRP), PARAMETER :: C1=0.5_CMISSRP
   REAL(CMISSRP), PARAMETER :: C2=0.1_CMISSRP
   
+  INTEGER(CMISSIntg), PARAMETER :: CONTEXT_USER_NUMBER=1
   INTEGER(CMISSIntg), PARAMETER :: COORDINATE_SYSTEM_USER_NUMBER=1
   INTEGER(CMISSIntg), PARAMETER :: REGION_USER_NUMBER=1
   INTEGER(CMISSIntg), PARAMETER :: BASIS_USER_NUMBER=1
@@ -47,7 +48,7 @@ PROGRAM UniaxialExtension
     & numberOfNodesPerElement,numberOfTensorComponents,numberOfXi,status,xNodeIdx,yNodeIdx,zNodeIdx
   REAL(CMISSRP) :: alpha,analAlpha,errorAlpha,beta,analBeta,errorBeta,gamma,analGamma,errorGamma,J,analJ,errorJ,p,analP,errorP, &
     & F(3,3),analF(3,3),errorF(3,3),C(3,3),analC(3,3),errorC(3,3),E(3,3),analE(3,3),errorE(3,3),S(3,3),analS(3,3),errorS(3,3), &
-    & sigma(3,3),analSigma(3,3),errorSigma(3,3),xi(3),yValue,zValue
+    & sigma(3,3),analSigma(3,3),errorSigma(3,3),initialBeta,initialP,xi(3),yValue,zValue
   LOGICAL :: directoryExists=.FALSE.
   CHARACTER(LEN=255) :: commandArgument
   
@@ -156,17 +157,20 @@ PROGRAM UniaxialExtension
   END SELECT
   numberOfNodes=numberOfGlobalXNodes*numberOfGlobalYNodes*numberOfGlobalZNodes
   
-  !Intialise cmiss
+  !Intialise OpenCMISS
+  CALL cmfe_Initialise(err)
+  CALL cmfe_ErrorHandlingModeSet(CMFE_ERRORS_TRAP_ERROR,err)
+  !Set all diganostic levels on for testing
+  CALL cmfe_DiagnosticsSetOn(CMFE_FROM_DIAG_TYPE,[1,2,3,4,5],"Diagnostics",["FiniteElasticity_FiniteElementResidualEvaluate"],err)
+  !Set output
+  CALL cmfe_OutputSetOn("Uniaxial",err)
+  !Create a context
   CALL cmfe_Context_Initialise(context,err)
-  CALL cmfe_Initialise(context,err)
+  CALL cmfe_Context_Create(CONTEXT_USER_NUMBER,context,err)
   CALL cmfe_ErrorHandlingModeSet(CMFE_ERRORS_TRAP_ERROR,err)
   CALL cmfe_Region_Initialise(worldRegion,err)
   CALL cmfe_Context_WorldRegionGet(context,worldRegion,err)
 
-  !Set all diganostic levels on for testing
-  CALL cmfe_DiagnosticsSetOn(CMFE_FROM_DIAG_TYPE,[1,2,3,4,5],"Diagnostics",["FiniteElasticity_FiniteElementResidualEvaluate"],err)
-
-  CALL cmfe_OutputSetOn("Uniaxial",err)
   
   !Get the number of computational nodes and this computational node number
   CALL cmfe_ComputationEnvironment_Initialise(computationEnvironment,err)
@@ -347,8 +351,8 @@ PROGRAM UniaxialExtension
     & CMFE_FIELD_U2_VARIABLE_TYPE,err)
   CALL cmfe_EquationsSet_DerivedVariableSet(equationsSet,CMFE_EQUATIONS_SET_DERIVED_GREEN_LAGRANGE_STRAIN, &
     & CMFE_FIELD_U3_VARIABLE_TYPE,err)
-  !CALL cmfe_EquationsSet_DerivedVariableSet(equationsSet,CMFE_EQUATIONS_SET_DERIVED_SECOND_PK_STRESS, &
-  !  & CMFE_FIELD_U4_VARIABLE_TYPE,err)
+  CALL cmfe_EquationsSet_DerivedVariableSet(equationsSet,CMFE_EQUATIONS_SET_DERIVED_SECOND_PK_STRESS, &
+    & CMFE_FIELD_U4_VARIABLE_TYPE,err)
   CALL cmfe_EquationsSet_DerivedVariableSet(equationsSet,CMFE_EQUATIONS_SET_DERIVED_CAUCHY_STRESS, &
     & CMFE_FIELD_U5_VARIABLE_TYPE,err)
   CALL cmfe_EquationsSet_DerivedCreateFinish(equationsSet,err)
@@ -456,6 +460,30 @@ PROGRAM UniaxialExtension
    
   CALL cmfe_SolverEquations_BoundaryConditionsCreateFinish(solverEquations,err)
 
+  !Set initial values for the dependent field
+  SELECT CASE(numberOfDimensions)
+  CASE(2)
+    initialBeta=0.09090957777_CMISSRP
+    initialP  =-0.19177686982_CMISSRP
+    !Set initial values for the top
+    DO zNodeIdx=1,numberOfGlobalZNodes
+      DO xNodeIdx=1,numberOfGlobalXNodes
+        nodeNumber=xNodeIdx+(numberOfGlobalYNodes-1)*numberOfGlobalXNodes+(zNodeIdx-1)*numberOfGlobalXNodes*numberOfGlobalYNodes
+        CALL cmfe_Decomposition_NodeDomainGet(decomposition,nodeNumber,1,nodeDomain,err)
+        IF(nodeDomain==computationalNodeNumber) THEN
+          !y-direction
+          CALL cmfe_Field_ParameterSetUpdateNode(dependentField,CMFE_FIELD_U_VARIABLE_TYPE,CMFE_FIELD_VALUES_SET_TYPE,1,1, &
+            & nodeNumber,2,1.0_CMISSRP-initialBeta,err)
+        ENDIF
+      ENDDO !yNodeIdx
+    ENDDO !zNodeIdx
+    CALL cmfe_Field_ParameterSetUpdateElement(dependentField,CMFE_FIELD_U_VARIABLE_TYPE,CMFE_FIELD_VALUES_SET_TYPE, &
+      & 1,numberOfDimensions+1,initialP,err)
+  CASE(3)
+  CASE DEFAULT
+    CALL HandleError("Invalid number of dimensions.")
+  END SELECT
+
   !Solve problem
   CALL cmfe_Problem_Solve(problem,err)
 
@@ -463,7 +491,7 @@ PROGRAM UniaxialExtension
   CALL cmfe_EquationsSet_DerivedVariableCalculate(equationsSet,CMFE_EQUATIONS_SET_DERIVED_DEFORMATION_GRADIENT,err)
   CALL cmfe_EquationsSet_DerivedVariableCalculate(equationsSet,CMFE_EQUATIONS_SET_DERIVED_R_CAUCHY_GREEN_DEFORMATION,err)
   CALL cmfe_EquationsSet_DerivedVariableCalculate(equationsSet,CMFE_EQUATIONS_SET_DERIVED_GREEN_LAGRANGE_STRAIN,err)
-  !CALL cmfe_EquationsSet_DerivedVariableCalculate(equationsSet,CMFE_EQUATIONS_SET_DERIVED_SECOND_PK_STRESS,err)
+  CALL cmfe_EquationsSet_DerivedVariableCalculate(equationsSet,CMFE_EQUATIONS_SET_DERIVED_SECOND_PK_STRESS,err)
   CALL cmfe_EquationsSet_DerivedVariableCalculate(equationsSet,CMFE_EQUATIONS_SET_DERIVED_CAUCHY_STRESS,err)
   !Construct tensors
   analAlpha=alpha
@@ -535,8 +563,8 @@ PROGRAM UniaxialExtension
     CALL cmfe_Field_ParameterSetGetElement(derivedField,CMFE_FIELD_U5_VARIABLE_TYPE,CMFE_FIELD_VALUES_SET_TYPE,1,2,sigma(2,2),err)
     CALL cmfe_Field_ParameterSetGetElement(derivedField,CMFE_FIELD_U5_VARIABLE_TYPE,CMFE_FIELD_VALUES_SET_TYPE,1,3,sigma(1,2),err)
     sigma(2,1)=sigma(1,2)
-    analSigma(1,1)=analJ**(-2.5_CMISSRP)*C1*(analAlpha*(2.0_CMISSRP+analAlpha)-analBeta*(2.0_CMISSRP-analBeta))-analP
-    analSigma(2,2)=-1.0*CMISSRP*analJ**(-2.5_CMISSRP)*C1*(analAlpha*(2.0_CMISSRP+analAlpha)-analBeta*(2.0_CMISSRP-analBeta))-analP
+    analSigma(1,1)=analJ**(-2.5_CMISSRP)*C1*(analAlpha*(2.0_CMISSRP+analAlpha)-analBeta*(2.0_CMISSRP-analBeta))+analP
+    analSigma(2,2)=-1.0*CMISSRP*analJ**(-2.5_CMISSRP)*C1*(analAlpha*(2.0_CMISSRP+analAlpha)-analBeta*(2.0_CMISSRP-analBeta))+analP
   CASE(3)
     J=(1.0_CMISSRP+alpha)*(1.0_CMISSRP-beta)*(1.0_CMISSRP-gamma)
     analJ=(1.0_CMISSRP+analAlpha)*(1.0_CMISSRP-analBeta)*(1.0_CMISSRP-analGamma)
@@ -610,19 +638,19 @@ PROGRAM UniaxialExtension
       & (C1+C2*((1.0_CMISSRP-analBeta)**2.0_CMISSRP+(1.0_CMISSRP-analGamma)**2.0_CMISSRP))) &
       & -((1.0_CMISSRP-analBeta)**2.0_CMISSRP*(C1+C2*((1.0_CMISSRP+analAlpha)**2.0_CMISSRP+(1.0_CMISSRP-analGamma)**2.0_CMISSRP))) &
       & -((1.0_CMISSRP-analGamma)**2.0_CMISSRP*(C1+C2*((1.0_CMISSRP+analAlpha)**2.0_CMISSRP+(1.0_CMISSRP-analBeta)**2.0_CMISSRP))) &
-      & )-analP
+      & )+analP
     analSigma(2,2)=(2.0_CMISSRP/(3.0_CMISSRP*analJ**3.0_CMISSRP))*((-1.0_CMISSRP*(1.0_CMISSRP+analAlpha)**2.0_CMISSRP* &
       & (C1+C2*((1.0_CMISSRP+analBeta)**2.0_CMISSRP+(1.0_CMISSRP-analGamma)**2.0_CMISSRP))) &
       & +(2.0_CMISSRP*(1.0_CMISSRP-analBeta)**2.0_CMISSRP*(C1+C2*((1.0_CMISSRP+analAlpha)**2.0_CMISSRP+(1.0_CMISSRP-analGamma)** &
       & 2.0_CMISSRP))) &
       & -((1.0_CMISSRP-analGamma)**2.0_CMISSRP*(C1+C2*((1.0_CMISSRP+analAlpha)**2.0_CMISSRP+(1.0_CMISSRP-analBeta)**2.0_CMISSRP))) &
-      & )-analP
+      & )+analP
     analSigma(3,3)=(2.0_CMISSRP/(3.0_CMISSRP*analJ**3.0_CMISSRP))*((-1.0_CMISSRP*(1.0_CMISSRP+analAlpha)**2.0_CMISSRP* &
       & (C1+C2*((1.0_CMISSRP+analBeta)**2.0_CMISSRP+(1.0_CMISSRP-analGamma)**2.0_CMISSRP))) &
       & -((1.0_CMISSRP-analBeta)**2.0_CMISSRP*(C1+C2*((1.0_CMISSRP+analAlpha)**2.0_CMISSRP+(1.0_CMISSRP-analGamma)** &
       & 2.0_CMISSRP))) &
       & +(2.0_CMISSRP*(1.0_CMISSRP-analGamma)**2.0_CMISSRP*(C1+C2*((1.0_CMISSRP+analAlpha)**2.0_CMISSRP+(1.0_CMISSRP-analBeta)** &
-      & 2.0_CMISSRP))))-analP
+      & 2.0_CMISSRP))))+analP
   CASE DEFAULT
     CALL HandleError("Invalid number of dimensions.")    
   END SELECT
@@ -661,7 +689,10 @@ PROGRAM UniaxialExtension
   CALL cmfe_Fields_ElementsExport(fields,"./results/Uniaxial","FORTRAN",err)
   CALL cmfe_Fields_Finalise(fields,err)
 
-  !CALL cmfe_Finalise(context,err)
+  !Destroy the context
+  CALL cmfe_Context_Destroy(context,err)
+  !Finalise OpenCMISS
+  CALL cmfe_Finalise(err)
 
   WRITE(*,'(A)') "Program successfully completed."
 
