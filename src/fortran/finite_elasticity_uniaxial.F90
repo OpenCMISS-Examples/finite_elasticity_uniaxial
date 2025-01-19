@@ -7,9 +7,11 @@ PROGRAM UniaxialExtension
     
   !Test program parameters
     
-  REAL(OC_RP), PARAMETER :: HEIGHT=1.0_OC_RP
-  REAL(OC_RP), PARAMETER :: WIDTH=1.0_OC_RP
-  REAL(OC_RP), PARAMETER :: LENGTH=1.0_OC_RP
+  REAL(OC_RP), PARAMETER :: LENGTH=1.0_OC_RP !x-extent
+  REAL(OC_RP), PARAMETER :: HEIGHT=1.0_OC_RP !y-extent
+  REAL(OC_RP), PARAMETER :: WIDTH=1.0_OC_RP  !z-extent
+  
+  REAL(OC_RP), PARAMETER :: ALPHA=0.1_OC_RP
   
   REAL(OC_RP), PARAMETER :: C1=0.5_OC_RP
   REAL(OC_RP), PARAMETER :: C2=0.1_OC_RP
@@ -38,7 +40,7 @@ PROGRAM UniaxialExtension
     & equationsSetIndex,err,interpolationType,nodeDomain,nodeNumber,numberOfArguments,numberOfComputationalNodes, &
     & numberOfDimensions,numberOfGaussXi,numberOfGLobalXNodes,numberOfGlobalYNodes,numberOfGlobalZNodes,numberOfNodes, &
     & numberOfNodesPerElement,numberOfTensorComponents,numberOfXi,status,xNodeIdx,yNodeIdx,zNodeIdx
-  REAL(OC_RP) :: alpha,analAlpha,errorAlpha,beta,analBeta,errorBeta,gamma,analGamma,errorGamma,J,analJ,errorJ,p,analP,errorP, &
+  REAL(OC_RP) :: analAlpha,errorAlpha,analBeta,beta,errorBeta,analGamma,errorGamma,gamma,J,analJ,errorJ,p,analP,errorP, &
     & F(3,3),analF(3,3),errorF(3,3),C(3,3),analC(3,3),errorC(3,3),E(3,3),analE(3,3),errorE(3,3),S(3,3),analS(3,3),errorS(3,3), &
     & sigma(3,3),analSigma(3,3),errorSigma(3,3),initialBeta,initialP,xi(3),yValue,zValue
   LOGICAL :: directoryExists=.FALSE.
@@ -75,24 +77,14 @@ PROGRAM UniaxialExtension
     IF(numberOfArguments>=2) THEN
       CALL GET_COMMAND_ARGUMENT(2,commandArgument,argumentLength,status)
       IF(status>0) CALL HandleError("Error for command argument 2.")
-      READ(commandArgument(1:argumentLength),*) alpha
-      IF(alpha<0.000001_OC_RP.OR.alpha>0.999999_OC_RP) CALL HandleError("Invalid alpha specification.")
-      IF(numberOfArguments>=3) THEN
-        CALL GET_COMMAND_ARGUMENT(3,commandArgument,argumentLength,status)
-        IF(status>0) CALL HandleError("Error for command argument 3.")
-        READ(commandArgument(1:argumentLength),*) interpolationType
-        IF(interpolationType<1.OR.interpolationType>9) CALL HandleError("Invalid interpolation specification.")
-      ELSE
-        interpolationType=OC_BASIS_LINEAR_LAGRANGE_INTERPOLATION
-      ENDIF
+      READ(commandArgument(1:argumentLength),*) interpolationType
+      IF(interpolationType<1.OR.interpolationType>9) CALL HandleError("Invalid interpolation specification.")
     ELSE
-      alpha=0.1_OC_RP
       interpolationType=OC_BASIS_LINEAR_LAGRANGE_INTERPOLATION
     ENDIF
   ELSE
     !If there are not enough arguments default the problem specification
-    numberOfDimensions=2
-    alpha=0.1_OC_RP
+    numberOfDimensions=3
     interpolationType=OC_BASIS_LINEAR_LAGRANGE_INTERPOLATION
   ENDIF
 
@@ -153,7 +145,7 @@ PROGRAM UniaxialExtension
   CALL OC_Initialise(err)
   CALL OC_ErrorHandlingModeSet(OC_ERRORS_TRAP_ERROR,err)
   !Set all diganostic levels on for testing
-  CALL OC_DiagnosticsSetOn(OC_FROM_DIAG_TYPE,[1,2,3,4,5],"Diagnostics",["FiniteElasticity_FiniteElementResidualEvaluate"],err)
+  !CALL OC_DiagnosticsSetOn(OC_ALL_DIAG_TYPE,[1,2,3,4,5],"Diagnostics",["FiniteElasticity_FiniteElementResidualEvaluate"],err)
   !Set output
   CALL OC_OutputSetOn("Uniaxial",err)
   !Create a context
@@ -219,10 +211,10 @@ PROGRAM UniaxialExtension
   CALL OC_GeneratedMesh_BasisSet(generatedMesh,basis,err)
   !Define the mesh on the region
   IF(numberOfDimensions==2) THEN
-    CALL OC_GeneratedMesh_ExtentSet(generatedMesh,[WIDTH,HEIGHT],err)
+    CALL OC_GeneratedMesh_ExtentSet(generatedMesh,[LENGTH,HEIGHT],err)
     CALL OC_GeneratedMesh_NumberOfElementsSet(generatedMesh,[1,1],err)
   ELSE
-    CALL OC_GeneratedMesh_ExtentSet(generatedMesh,[WIDTH,HEIGHT,LENGTH],err)
+    CALL OC_GeneratedMesh_ExtentSet(generatedMesh,[LENGTH,HEIGHT,WIDTH],err)
     CALL OC_GeneratedMesh_NumberOfElementsSet(generatedMesh,[1,1,1],err)
   ENDIF
   !Finish the creation of a generated mesh in the region
@@ -261,6 +253,7 @@ PROGRAM UniaxialExtension
   CALL OC_Field_GeometricFieldSet(dependentField,geometricField,err)
   CALL OC_Field_DependentTypeSet(dependentField,OC_FIELD_DEPENDENT_TYPE,err)
   CALL OC_Field_NumberOfVariablesSet(dependentField,2,err)
+  CALL OC_Field_VariableTypesSet(dependentField,[OC_FIELD_U_VARIABLE_TYPE,OC_FIELD_T_VARIABLE_TYPE],err)
   CALL OC_Field_VariableLabelSet(dependentField,OC_FIELD_U_VARIABLE_TYPE,"Dependent",err)
   CALL OC_Field_NumberOfComponentsSet(dependentField,OC_FIELD_U_VARIABLE_TYPE,numberOfDimensions+1,err)
   CALL OC_Field_NumberOfComponentsSet(dependentField,OC_FIELD_T_VARIABLE_TYPE,numberOfDimensions+1,err)
@@ -403,7 +396,7 @@ PROGRAM UniaxialExtension
   DO zNodeIdx=1,numberOfGlobalZNodes
     DO yNodeIdx=1,numberOfGlobalYNodes
       nodeNumber=1+(yNodeIdx-1)*numberOfGlobalXNodes+(zNodeIdx-1)*numberOfGlobalXNodes*numberOfGlobalYNodes
-      CALL OC_Decomposition_NodeDomainGet(decomposition,nodeNumber,1,nodeDomain,err)
+      CALL OC_Decomposition_NodeDomainGet(decomposition,1,nodeNumber,nodeDomain,err)
       IF(nodeDomain==computationalNodeNumber) THEN
         !x-direction
         CALL OC_BoundaryConditions_AddNode(boundaryConditions,dependentField,OC_FIELD_U_VARIABLE_TYPE,1,1,nodeNumber,1, &
@@ -415,7 +408,7 @@ PROGRAM UniaxialExtension
   DO zNodeIdx=1,numberOfGlobalZNodes
     DO xNodeIdx=1,numberOfGlobalXNodes
       nodeNumber=xNodeIdx+(zNodeIdx-1)*numberOfGlobalXNodes*numberOfGlobalYNodes
-      CALL OC_Decomposition_NodeDomainGet(decomposition,nodeNumber,1,nodeDomain,err)
+      CALL OC_Decomposition_NodeDomainGet(decomposition,1,nodeNumber,nodeDomain,err)
       IF(nodeDomain==computationalNodeNumber) THEN
         !y-direction
         CALL OC_BoundaryConditions_AddNode(boundaryConditions,dependentField,OC_FIELD_U_VARIABLE_TYPE,1,1,nodeNumber,2, &
@@ -428,7 +421,7 @@ PROGRAM UniaxialExtension
     DO yNodeIdx=1,numberOfGlobalYNodes
       DO xNodeIdx=1,numberOfGlobalXNodes
         nodeNumber=xNodeIdx+(yNodeIdx-1)*numberOfGlobalXNodes
-        CALL OC_Decomposition_NodeDomainGet(decomposition,nodeNumber,1,nodeDomain,err)
+        CALL OC_Decomposition_NodeDomainGet(decomposition,1,nodeNumber,nodeDomain,err)
         IF(nodeDomain==computationalNodeNumber) THEN
           !z-direction
           CALL OC_BoundaryConditions_AddNode(boundaryConditions,dependentField,OC_FIELD_U_VARIABLE_TYPE,1,1,nodeNumber,3, &
@@ -437,44 +430,54 @@ PROGRAM UniaxialExtension
       ENDDO !yNodeIdx
     ENDDO !zNodeIdx
   ENDIF
-  !Fix the x=LENGTH nodes to alpha% x-displacement
+  !Fix the x=LENGTH nodes to 1+ALPHA*LENGTH
   DO zNodeIdx=1,numberOfGlobalZNodes
     DO yNodeIdx=1,numberOfGlobalYNodes
       nodeNumber=numberOfGlobalXNodes+(yNodeIdx-1)*numberOfGlobalXNodes+(zNodeIdx-1)*numberOfGlobalXNodes*numberOfGlobalYNodes
-      CALL OC_Decomposition_NodeDomainGet(decomposition,nodeNumber,1,nodeDomain,err)
+      CALL OC_Decomposition_NodeDomainGet(decomposition,1,nodeNumber,nodeDomain,err)
       IF(nodeDomain==computationalNodeNumber) THEN
         !x-direction
+        WRITE(*,'("Setting x boundary condition for node ",I0)') nodeNumber
         CALL OC_BoundaryConditions_AddNode(boundaryConditions,dependentField,OC_FIELD_U_VARIABLE_TYPE,1,1,nodeNumber,1, &
-          & OC_BOUNDARY_CONDITION_FIXED,alpha,err)
+          & OC_BOUNDARY_CONDITION_FIXED,ALPHA*LENGTH,err)
       ENDIF
     ENDDO !yNodeIdx
   ENDDO !zNodeIdx
-   
+  ! !Fix the y=HEIGHT nodes to 1-BETA*HEIGHT
+  ! DO zNodeIdx=1,numberOfGlobalZNodes
+  !   DO xNodeIdx=1,numberOfGlobalXNodes
+  !     nodeNumber=numberOfGlobalXNodes*(numberOfGlobalYNodes-1)+xNodeIdx+(zNodeIdx-1)*numberOfGlobalXNodes*numberOfGlobalYNodes
+  !     CALL OC_Decomposition_NodeDomainGet(decomposition,1,nodeNumber,nodeDomain,err)
+  !     IF(nodeDomain==computationalNodeNumber) THEN
+  !       !y-direction
+  !       WRITE(*,'("Setting y boundary condition for node ",I0)') nodeNumber
+  !       CALL OC_BoundaryConditions_AddNode(boundaryConditions,dependentField,OC_FIELD_U_VARIABLE_TYPE,1,1,nodeNumber,2, &
+  !         & OC_BOUNDARY_CONDITION_FIXED,-BETA*HEIGHT,err)
+  !     ENDIF
+  !   ENDDO !xNodeIdx
+  ! ENDDO !zNodeIdx
+  ! IF(numberOfDimensions==3) THEN
+  !   !Fix the z=WIDTH nodes to 1-GAMMA*WIDTH
+  !   DO yNodeIdx=1,numberOfGlobalYNodes
+  !     DO xNodeIdx=1,numberOfGlobalXNodes
+  !       nodeNumber=xNodeIdx+(yNodeIdx-1)*numberOfGlobalXNodes+(numberOfGlobalZNodes-1)*numberOfGlobalXNodes*numberOfGlobalYNodes 
+  !       CALL OC_Decomposition_NodeDomainGet(decomposition,1,nodeNumber,nodeDomain,err)
+  !       IF(nodeDomain==computationalNodeNumber) THEN
+  !         !z-direction
+  !         WRITE(*,'("Setting z boundary condition for node ",I0)') nodeNumber
+  !         CALL OC_BoundaryConditions_AddNode(boundaryConditions,dependentField,OC_FIELD_U_VARIABLE_TYPE,1,1,nodeNumber,3, &
+  !           & OC_BOUNDARY_CONDITION_FIXED,-GAMMA*WIDTH,err)
+  !       ENDIF
+  !     ENDDO !yNodeIdx
+  !   ENDDO !yNodeIdx
+  ! ENDIF
+  
   CALL OC_SolverEquations_BoundaryConditionsCreateFinish(solverEquations,err)
 
   !Set initial values for the dependent field
-  SELECT CASE(numberOfDimensions)
-  CASE(2)
-    initialBeta=0.09090957777_OC_RP
-    initialP  =-0.19177686982_OC_RP
-    !Set initial values for the top
-    DO zNodeIdx=1,numberOfGlobalZNodes
-      DO xNodeIdx=1,numberOfGlobalXNodes
-        nodeNumber=xNodeIdx+(numberOfGlobalYNodes-1)*numberOfGlobalXNodes+(zNodeIdx-1)*numberOfGlobalXNodes*numberOfGlobalYNodes
-        CALL OC_Decomposition_NodeDomainGet(decomposition,nodeNumber,1,nodeDomain,err)
-        IF(nodeDomain==computationalNodeNumber) THEN
-          !y-direction
-          CALL OC_Field_ParameterSetUpdateNode(dependentField,OC_FIELD_U_VARIABLE_TYPE,OC_FIELD_VALUES_SET_TYPE,1,1, &
-            & nodeNumber,2,1.0_OC_RP-initialBeta,err)
-        ENDIF
-      ENDDO !yNodeIdx
-    ENDDO !zNodeIdx
-    CALL OC_Field_ParameterSetUpdateElement(dependentField,OC_FIELD_U_VARIABLE_TYPE,OC_FIELD_VALUES_SET_TYPE, &
-      & 1,numberOfDimensions+1,initialP,err)
-  CASE(3)
-  CASE DEFAULT
-    CALL HandleError("Invalid number of dimensions.")
-  END SELECT
+  initialP=0.1_OC_RP !Compressive
+  CALL OC_Field_ParameterSetUpdateElement(dependentField,OC_FIELD_U_VARIABLE_TYPE,OC_FIELD_VALUES_SET_TYPE, &
+    & 1,numberOfDimensions+1,initialP,err)
 
   !Solve problem
   CALL OC_Problem_Solve(problem,err)
@@ -487,21 +490,20 @@ PROGRAM UniaxialExtension
   CALL OC_EquationsSet_DerivedVariableCalculate(equationsSet,OC_EQUATIONS_SET_DERIVED_CAUCHY_STRESS,err)
   !Construct tensors
   analAlpha=alpha
+  analBeta=SQRT(1.0_OC_RP/(1.0_OC_RP+ALPHA))
+  analGamma=analBeta
   CALL ComputeError(alpha,analAlpha,errorAlpha)
   CALL OC_Field_ParameterSetGetNode(dependentField,OC_FIELD_U_VARIABLE_TYPE,OC_FIELD_VALUES_SET_TYPE,1,1,numberOfNodes,2, &
     & yValue,err)
-  beta=1-yValue
-  analBeta=beta
+  beta=yValue
   CALL ComputeError(beta,analBeta,errorBeta)
   IF(numberOfDimensions==3) THEN
     CALL OC_Field_ParameterSetGetNode(dependentField,OC_FIELD_U_VARIABLE_TYPE,OC_FIELD_VALUES_SET_TYPE,1,1,numberOfNodes,3, &
       & zValue,err)
-    gamma=1-zValue
-    analGamma=gamma
-    CALL ComputeError(gamma,analGamma,errorGamma)
+    gamma=zValue
+   CALL ComputeError(gamma,analGamma,errorGamma)
   ELSE
     zValue=0.0_OC_RP
-    gamma=0.0_OC_RP
     errorGamma=0.0_OC_RP
   ENDIF
   CALL OC_Field_ParameterSetGetElement(dependentField,OC_FIELD_U_VARIABLE_TYPE,OC_FIELD_VALUES_SET_TYPE, &
